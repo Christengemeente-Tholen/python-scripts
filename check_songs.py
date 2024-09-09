@@ -23,4 +23,4 @@ with open("check_songs.txt", "w") as fp:
     for song in ops_songs:
         title = song.get("title", "")
         if title.lower() in lowercase_pco_songs:
-            fp.write(title + os.linesep)
+            fp.write(f"{song.get('book', '')}: {title} {os.linesep}")
