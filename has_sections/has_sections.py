@@ -58,7 +58,7 @@ def get_song_info(song_id, song_name):
     ).json()
 
     for arrangement in result.get("data", {}):
-        arrangement_id = arrangement.get("id", "")
+        arrangement_id: int = arrangement.get("id", "")
         lyrics = arrangement.get("attributes", {}).get("lyrics", "")
         if lyrics is None:
             continue
@@ -75,11 +75,11 @@ def get_song_info(song_id, song_name):
 
 
         html_output, total_red = highlight_non_section_text(lyrics.replace("\n\n", "\n"), section_texts)
-
+        
         # Save to file or display in browser
         with open(f"{dir_path}/results/{song_name.replace("/", "-")}.html", "w", encoding="utf-8") as f:
             f.write(f"<html><body>{html_output.replace("\n", "<br />")}</body></html>")
-        return total_red
+        return (total_red, arrangement_id)
 
 total = []
 if os.path.exists("result.json"):
@@ -94,13 +94,18 @@ def all():
             if not any(item['id'] == key for item in total):
                 result = get_song_info(key, value)
                 if result is not None:
-                    total.append({"id": key, "song_name": value, "total": result})
+                    total_red, arrangement_id = result
+                    total.append({
+                        "id": key,
+                        "song_name": value, 
+                        "total": total_red, 
+                        "edit_url": f"https://services.planningcenteronline.com/songs/{key}/arrangements/{arrangement_id}/chord_chart/edit"
+                    })
                     with open("result.json", "w") as d:
                         json.dump(total, d, indent=4, sort_keys=True)
         df = pd.DataFrame(total)
         print(df)
         df.to_csv('result.csv', index=False) 
-        
 def song(song_id):
     with open(f"{dir_path}/pco_songs_dict.json") as f:
         ops_songs = json.load(f)
@@ -108,7 +113,13 @@ def song(song_id):
         song_name = ops_songs.get(song_id)
         result = get_song_info(song_id, song_name)
         if result is not None:
-            total.append({"id": song_id, "song_name": song_name, "total": result})
+            total_red, arrangement_id = result
+            total.append({
+                "id": song_id,
+                "song_name": song_name, 
+                "total": total_red, 
+                "edit_url": f"https://services.planningcenteronline.com/songs/{song_id}/arrangements/{arrangement_id}/chord_chart/edit"
+            })
             with open("result.json", "w") as d:
                 json.dump(total, d, indent=4, sort_keys=True)
         df = pd.DataFrame(total)
