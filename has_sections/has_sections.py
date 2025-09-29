@@ -11,12 +11,11 @@ load_dotenv()
 
 
 def highlight_non_section_text(full_text, sections):
-
     # Escape special characters in sections for regex
     escaped_sections = [re.escape(section) for section in sections]
 
     # Combine all sections into one regex pattern
-    pattern = '|'.join(escaped_sections)
+    pattern = "|".join(escaped_sections)
 
     # Find all matches (sections to keep)
     matches = list(re.finditer(pattern, full_text))
@@ -64,48 +63,77 @@ def get_song_info(song_id, song_name):
             continue
         sections_data: dict = requests.get(
             f"https://api.planningcenteronline.com/services/v2/songs/{song_id}/arrangements/{arrangement_id}/sections",
-            auth=basic
+            auth=basic,
         ).json()
         section_texts = []
-        sections = sections_data.get("data", {}).get("attributes", {}).get("sections", [])
+        sections = (
+            sections_data.get("data", {}).get("attributes", {}).get("sections", [])
+        )
+        longest_section_length = 0
         for section in sections:
             section_texts.append(section.get("label", ""))
-            current = section.get("lyrics", "").replace("\n\r", "\n").replace("\r\n", "\n").replace("\r", "\n")
-            section_texts.append(current) 
+            current: str = (
+                section.get("lyrics", "")
+                .replace("\n\r", "\n")
+                .replace("\r\n", "\n")
+                .replace("\r", "\n")
+            )
+            section_texts.append(current)
+            section_length = current.count("\n")
+            if section_length > longest_section_length:
+                longest_section_length = section_length
 
+        html_output, total_red = highlight_non_section_text(
+            lyrics.replace("\n\n", "\n"), section_texts
+        )
 
-        html_output, total_red = highlight_non_section_text(lyrics.replace("\n\n", "\n"), section_texts)
-        
         # Save to file or display in browser
-        with open(f"{dir_path}/results/{song_name.replace("/", "-")}.html", "w", encoding="utf-8") as f:
-            f.write(f"<html><body>{html_output.replace("\n", "<br />")}</body></html>")
-        return (total_red, arrangement_id)
+        with open(
+            f"{dir_path}/results/{song_name.replace('/', '-')}.html",
+            "w",
+            encoding="utf-8",
+        ) as f:
+            f.write(f"<html><body>{html_output.replace('\n', '<br />')}</body></html>")
+        return (total_red, arrangement_id, len(sections), longest_section_length)
+
 
 total = []
 if os.path.exists("result.json"):
     with open("result.json") as d:
         total = json.load(d)
 
+
 def all():
     with open(f"{dir_path}/pco_songs_dict.json") as f:
         ops_songs = json.load(f)
 
         for key, value in ops_songs.items():
-            if not any(item['id'] == key for item in total):
+            if not any(item["id"] == key for item in total):
                 result = get_song_info(key, value)
                 if result is not None:
-                    total_red, arrangement_id = result
-                    total.append({
-                        "id": key,
-                        "song_name": value, 
-                        "total": total_red, 
-                        "edit_url": f"https://services.planningcenteronline.com/songs/{key}/arrangements/{arrangement_id}/chord_chart/edit"
-                    })
+                    (
+                        total_red,
+                        arrangement_id,
+                        total_sections,
+                        longest_section_length,
+                    ) = result
+                    total.append(
+                        {
+                            "id": key,
+                            "song_name": value,
+                            "total_red": total_red,
+                            "total_sections": total_sections,
+                            "longest_section_length": longest_section_length,
+                            "edit_url": f"https://services.planningcenteronline.com/songs/{key}/arrangements/{arrangement_id}/chord_chart/edit",
+                        }
+                    )
                     with open("result.json", "w") as d:
                         json.dump(total, d, indent=4, sort_keys=True)
         df = pd.DataFrame(total)
         print(df)
-        df.to_csv('result.csv', index=False) 
+        df.to_csv("result.csv", index=False)
+
+
 def song(song_id):
     with open(f"{dir_path}/pco_songs_dict.json") as f:
         ops_songs = json.load(f)
@@ -113,18 +141,23 @@ def song(song_id):
         song_name = ops_songs.get(song_id)
         result = get_song_info(song_id, song_name)
         if result is not None:
-            total_red, arrangement_id = result
-            total.append({
-                "id": song_id,
-                "song_name": song_name, 
-                "total": total_red, 
-                "edit_url": f"https://services.planningcenteronline.com/songs/{song_id}/arrangements/{arrangement_id}/chord_chart/edit"
-            })
+            total_red, arrangement_id, total_sections, longest_section_length = result
+            total.append(
+                {
+                    "id": song_id,
+                    "song_name": song_name,
+                    "total_red": total_red,
+                    "total_sections": total_sections,
+                    "longest_section_length": longest_section_length,
+                    "edit_url": f"https://services.planningcenteronline.com/songs/{song_id}/arrangements/{arrangement_id}/chord_chart/edit",
+                }
+            )
             with open("result.json", "w") as d:
                 json.dump(total, d, indent=4, sort_keys=True)
         df = pd.DataFrame(total)
         print(df)
-        df.to_csv('result.csv', index=False) 
-        
+        df.to_csv("result.csv", index=False)
+
+
 if __name__ == "__main__":
     all()
