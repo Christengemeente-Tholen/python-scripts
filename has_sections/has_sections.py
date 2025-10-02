@@ -45,7 +45,7 @@ def highlight_non_section_text(full_text, sections):
     return result, total_red
 
 
-def get_song_info(song_id, song_name):
+def get_song_info(song_id, song_name) -> list[tuple[int, int, int, int]]:
     print(song_name)
     basic = HTTPBasicAuth(
         os.getenv("CLIENT_ID", ""),
@@ -55,6 +55,8 @@ def get_song_info(song_id, song_name):
         f"https://api.planningcenteronline.com/services/v2/songs/{song_id}/arrangements/",
         auth=basic,
     ).json()
+
+    arrangement_results = []
 
     for arrangement in result.get("data", {}):
         arrangement_id: int = arrangement.get("id", "")
@@ -69,6 +71,13 @@ def get_song_info(song_id, song_name):
         sections = (
             sections_data.get("data", {}).get("attributes", {}).get("sections", [])
         )
+
+        with open(
+            f"{dir_path}/sections/{song_name.replace('/', '-')}_{arrangement_id}.json",
+            "w",
+        ) as d:
+            json.dump(sections, d, indent=4, sort_keys=True)
+
         longest_section_length = 0
         for section in sections:
             section_texts.append(section.get("label", ""))
@@ -83,18 +92,21 @@ def get_song_info(song_id, song_name):
             if section_length > longest_section_length:
                 longest_section_length = section_length
 
-        html_output, total_red = highlight_non_section_text(
+        html_output, total_section_red = highlight_non_section_text(
             lyrics.replace("\n\n", "\n"), section_texts
         )
 
         # Save to file or display in browser
         with open(
-            f"{dir_path}/results/{song_name.replace('/', '-')}.html",
+            f"{dir_path}/results/{song_name.replace('/', '-')}_{arrangement_id}.html",
             "w",
             encoding="utf-8",
         ) as f:
             f.write(f"<html><body>{html_output.replace('\n', '<br />')}</body></html>")
-        return (total_red, arrangement_id, len(sections), longest_section_length)
+        arrangement_results.append(
+            (total_section_red, arrangement_id, len(sections), longest_section_length)
+        )
+    return arrangement_results
 
 
 total = []
@@ -108,9 +120,9 @@ def all():
         ops_songs = json.load(f)
 
         for key, value in ops_songs.items():
-            if not any(item["id"] == key for item in total):
-                result = get_song_info(key, value)
-                if result is not None:
+            if not any(item["song_id"] == key for item in total):
+                results = get_song_info(key, value)
+                for result in results:
                     (
                         total_red,
                         arrangement_id,
@@ -119,8 +131,9 @@ def all():
                     ) = result
                     total.append(
                         {
-                            "id": key,
+                            "song_id": key,
                             "song_name": value,
+                            "arragement_id": arrangement_id,
                             "total_red": total_red,
                             "total_sections": total_sections,
                             "longest_section_length": longest_section_length,
@@ -139,13 +152,14 @@ def song(song_id):
         ops_songs = json.load(f)
 
         song_name = ops_songs.get(song_id)
-        result = get_song_info(song_id, song_name)
-        if result is not None:
+        results = get_song_info(song_id, song_name)
+        for result in results:
             total_red, arrangement_id, total_sections, longest_section_length = result
             total.append(
                 {
-                    "id": song_id,
+                    "song_id": song_id,
                     "song_name": song_name,
+                    "arrangement_id": arrangement_id,
                     "total_red": total_red,
                     "total_sections": total_sections,
                     "longest_section_length": longest_section_length,
